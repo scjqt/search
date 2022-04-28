@@ -1,25 +1,20 @@
-use std::cmp::Ordering;
-use std::collections::{BinaryHeap, HashSet, VecDeque};
-use std::hash::Hash;
-use std::marker::PhantomData;
-use std::ops::Add;
+use std::{
+    cmp::Ordering,
+    collections::{BinaryHeap, HashSet, VecDeque},
+    hash::Hash,
+    marker::PhantomData,
+    ops::Add,
+};
 
-pub struct Traversal<S, Q, A, I, F, N>
-where
-    Q: Collection<S>,
-    A: FnMut(&S) -> I,
-    I: IntoIterator<Item = S>,
-    F: FnMut(&S) -> N,
-    N: Hash + Eq,
-{
+struct Traverse<S, Q, A, I, F, N> {
     adjacent: A,
     normalise: F,
     states: Q,
     visited: HashSet<N>,
-    _phantom: PhantomData<S>,
+    _phantom: PhantomData<(S, I)>,
 }
 
-impl<S, Q, A, I, F, N> Iterator for Traversal<S, Q, A, I, F, N>
+impl<S, Q, A, I, F, N> Iterator for Traverse<S, Q, A, I, F, N>
 where
     Q: Collection<S>,
     A: FnMut(&S) -> I,
@@ -30,43 +25,38 @@ where
     type Item = S;
 
     fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            if let Some(current) = self.states.pop() {
-                let normalised = (self.normalise)(&current);
-                if self.visited.contains(&normalised) {
-                    continue;
-                }
-                self.visited.insert(normalised);
-                for state in (self.adjacent)(&current) {
-                    if !self.visited.contains(&(self.normalise)(&state)) {
-                        self.states.push(state);
-                    }
-                }
-                return Some(current);
-            }
-            return None;
+        let mut current = self.states.pop()?;
+        while self.visited.contains(&(self.normalise)(&current)) {
+            current = self.states.pop()?;
         }
+        self.visited.insert((self.normalise)(&current));
+        for state in (self.adjacent)(&current) {
+            if !self.visited.contains(&(self.normalise)(&state)) {
+                self.states.push(state);
+            }
+        }
+        return Some(current);
     }
 }
 
-pub fn bft<S, A, I, F, N>(start: S, adjacent: A, normalise: F) -> Traversal<S, Queue<S>, A, I, F, N>
+pub fn bft<S, A, I, F, N>(start: S, adjacent: A, normalise: F) -> impl Iterator<Item = S>
 where
     A: FnMut(&S) -> I,
     I: IntoIterator<Item = S>,
     F: FnMut(&S) -> N,
     N: Hash + Eq,
 {
-    Traversal::new(Queue::new(start), adjacent, normalise)
+    Traverse::new(Queue::new(), start, adjacent, normalise)
 }
 
-pub fn dft<S, A, I, F, N>(start: S, adjacent: A, normalise: F) -> Traversal<S, Stack<S>, A, I, F, N>
+pub fn dft<S, A, I, F, N>(start: S, adjacent: A, normalise: F) -> impl Iterator<Item = S>
 where
     A: FnMut(&S) -> I,
     I: IntoIterator<Item = S>,
     F: FnMut(&S) -> N,
     N: Hash + Eq,
 {
-    Traversal::new(Stack::new(start), adjacent, normalise)
+    Traverse::new(Stack::new(), start, adjacent, normalise)
 }
 
 pub fn dijkstra<S, A, I, F, N, C, P>(
@@ -74,16 +64,16 @@ pub fn dijkstra<S, A, I, F, N, C, P>(
     adjacent: A,
     normalise: F,
     cost: C,
-) -> Traversal<S, PriorityQueue<S, P>, A, I, F, N>
+) -> impl Iterator<Item = S>
 where
     A: FnMut(&S) -> I,
     I: IntoIterator<Item = S>,
     F: FnMut(&S) -> N,
     N: Hash + Eq,
-    C: FnMut(&S) -> P + 'static,
+    C: FnMut(&S) -> P,
     P: Ord,
 {
-    Traversal::new(PriorityQueue::new(start, cost), adjacent, normalise)
+    Traverse::new(PriorityQueue::new(cost), start, adjacent, normalise)
 }
 
 pub fn a_star<S, A, I, F, N, C, H, P>(
@@ -92,24 +82,21 @@ pub fn a_star<S, A, I, F, N, C, H, P>(
     normalise: F,
     mut cost: C,
     mut heuristic: H,
-) -> Traversal<S, PriorityQueue<S, P>, A, I, F, N>
+) -> impl Iterator<Item = S>
 where
     A: FnMut(&S) -> I,
     I: IntoIterator<Item = S>,
     F: FnMut(&S) -> N,
     N: Hash + Eq,
-    C: FnMut(&S) -> P + 'static,
-    H: FnMut(&S) -> P + 'static,
-    P: Ord + Add<Output = P>,
+    C: FnMut(&S) -> P,
+    H: FnMut(&S) -> P,
+    P: Add,
+    <P as Add>::Output: Ord,
 {
-    Traversal::new(
-        PriorityQueue::new(start, move |s| cost(s) + heuristic(s)),
-        adjacent,
-        normalise,
-    )
+    dijkstra(start, adjacent, normalise, move |s| cost(s) + heuristic(s))
 }
 
-impl<S, Q, A, I, F, N> Traversal<S, Q, A, I, F, N>
+impl<S, Q, A, I, F, N> Traverse<S, Q, A, I, F, N>
 where
     Q: Collection<S>,
     A: FnMut(&S) -> I,
@@ -117,26 +104,15 @@ where
     F: FnMut(&S) -> N,
     N: Hash + Eq,
 {
-    fn new(states: Q, adjacent: A, normalise: F) -> Traversal<S, Q, A, I, F, N> {
-        Traversal {
+    fn new(mut states: Q, start: S, adjacent: A, normalise: F) -> Traverse<S, Q, A, I, F, N> {
+        states.push(start);
+        Traverse {
             adjacent,
             normalise,
             states,
             visited: HashSet::new(),
             _phantom: PhantomData,
         }
-    }
-
-    pub fn search<G>(mut self, mut goal: G) -> Option<S>
-    where
-        G: FnMut(&S) -> bool,
-    {
-        while let Some(state) = self.next() {
-            if goal(&state) {
-                return Some(state);
-            }
-        }
-        None
     }
 }
 
@@ -151,8 +127,8 @@ pub struct Stack<S> {
 }
 
 impl<S> Stack<S> {
-    fn new(start: S) -> Stack<S> {
-        Stack { stack: vec![start] }
+    fn new() -> Stack<S> {
+        Stack { stack: Vec::new() }
     }
 }
 
@@ -171,9 +147,9 @@ pub struct Queue<S> {
 }
 
 impl<S> Queue<S> {
-    fn new(start: S) -> Queue<S> {
+    fn new() -> Queue<S> {
         Queue {
-            queue: VecDeque::from([start]),
+            queue: VecDeque::new(),
         }
     }
 }
@@ -188,28 +164,27 @@ impl<S> Collection<S> for Queue<S> {
     }
 }
 
-pub struct PriorityQueue<S, P>
-where
-    P: Ord,
-{
+pub struct PriorityQueue<S, C, P> {
     heap: BinaryHeap<PriorityState<S, P>>,
-    priority: Box<dyn FnMut(&S) -> P>,
+    priority: C,
 }
 
-impl<S, P> PriorityQueue<S, P>
+impl<S, C, P> PriorityQueue<S, C, P>
 where
+    C: FnMut(&S) -> P,
     P: Ord,
 {
-    fn new(start: S, mut priority: impl FnMut(&S) -> P + 'static) -> PriorityQueue<S, P> {
+    fn new(priority: C) -> PriorityQueue<S, C, P> {
         PriorityQueue {
-            heap: BinaryHeap::from([PriorityState::new(start, &mut priority)]),
-            priority: Box::new(priority),
+            heap: BinaryHeap::new(),
+            priority,
         }
     }
 }
 
-impl<S, P> Collection<S> for PriorityQueue<S, P>
+impl<S, C, P> Collection<S> for PriorityQueue<S, C, P>
 where
+    C: FnMut(&S) -> P,
     P: Ord,
 {
     fn push(&mut self, state: S) {
@@ -222,10 +197,7 @@ where
     }
 }
 
-struct PriorityState<S, P>
-where
-    P: Ord,
-{
+struct PriorityState<S, P> {
     state: S,
     priority: P,
 }
