@@ -26,10 +26,12 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         let mut current = self.states.pop()?;
-        while self.visited.contains(&(self.normalise)(&current)) {
+        let mut normalised = (self.normalise)(&current);
+        while self.visited.contains(&normalised) {
             current = self.states.pop()?;
+            normalised = (self.normalise)(&current);
         }
-        self.visited.insert((self.normalise)(&current));
+        self.visited.insert(normalised);
         for state in (self.adjacent)(&current) {
             if !self.visited.contains(&(self.normalise)(&state)) {
                 self.states.push(state);
