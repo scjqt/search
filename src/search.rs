@@ -4,11 +4,12 @@ use std::hash::Hash;
 use std::marker::PhantomData;
 use std::ops::Add;
 
-pub struct Traversal<S, Q, A, F, N>
+pub struct Traversal<S, Q, A, I, F, N>
 where
     Q: Collection<S>,
-    A: Fn(&S) -> Vec<S>,
-    F: Fn(&S) -> N,
+    A: FnMut(&S) -> I,
+    I: IntoIterator<Item = S>,
+    F: FnMut(&S) -> N,
     N: Hash + Eq,
 {
     adjacent: A,
@@ -18,11 +19,12 @@ where
     _phantom: PhantomData<S>,
 }
 
-impl<S, Q, A, F, N> Iterator for Traversal<S, Q, A, F, N>
+impl<S, Q, A, I, F, N> Iterator for Traversal<S, Q, A, I, F, N>
 where
     Q: Collection<S>,
-    A: Fn(&S) -> Vec<S>,
-    F: Fn(&S) -> N,
+    A: FnMut(&S) -> I,
+    I: IntoIterator<Item = S>,
+    F: FnMut(&S) -> N,
     N: Hash + Eq,
 {
     type Item = S;
@@ -47,50 +49,57 @@ where
     }
 }
 
-pub fn bft<S, A, F, N>(start: S, adjacent: A, normalise: F) -> Traversal<S, Queue<S>, A, F, N>
+pub fn bft<S, A, I, F, N>(start: S, adjacent: A, normalise: F) -> Traversal<S, Queue<S>, A, I, F, N>
 where
-    A: Fn(&S) -> Vec<S>,
-    F: Fn(&S) -> N,
+    A: FnMut(&S) -> I,
+    I: IntoIterator<Item = S>,
+    F: FnMut(&S) -> N,
     N: Hash + Eq,
 {
     Traversal::new(Queue::new(start), adjacent, normalise)
 }
 
-pub fn dft<S, A, F, N>(start: S, adjacent: A, normalise: F) -> Traversal<S, Stack<S>, A, F, N>
+pub fn dft<S, A, I, F, N>(start: S, adjacent: A, normalise: F) -> Traversal<S, Stack<S>, A, I, F, N>
 where
-    A: Fn(&S) -> Vec<S>,
-    F: Fn(&S) -> N,
+    A: FnMut(&S) -> I,
+    I: IntoIterator<Item = S>,
+    F: FnMut(&S) -> N,
     N: Hash + Eq,
 {
     Traversal::new(Stack::new(start), adjacent, normalise)
 }
 
-pub fn dijkstra<S, A, F, N, P>(
+pub fn dijkstra<S, A, I, F, N, C, P>(
     start: S,
     adjacent: A,
     normalise: F,
-    cost: impl Fn(&S) -> P + 'static,
-) -> Traversal<S, PriorityQueue<S, P>, A, F, N>
+    cost: C,
+) -> Traversal<S, PriorityQueue<S, P>, A, I, F, N>
 where
-    A: Fn(&S) -> Vec<S>,
-    F: Fn(&S) -> N,
+    A: FnMut(&S) -> I,
+    I: IntoIterator<Item = S>,
+    F: FnMut(&S) -> N,
     N: Hash + Eq,
+    C: FnMut(&S) -> P + 'static,
     P: Ord,
 {
     Traversal::new(PriorityQueue::new(start, cost), adjacent, normalise)
 }
 
-pub fn a_star<S, A, F, N, P>(
+pub fn a_star<S, A, I, F, N, C, H, P>(
     start: S,
     adjacent: A,
     normalise: F,
-    cost: impl Fn(&S) -> P + 'static,
-    heuristic: impl Fn(&S) -> P + 'static,
-) -> Traversal<S, PriorityQueue<S, P>, A, F, N>
+    mut cost: C,
+    mut heuristic: H,
+) -> Traversal<S, PriorityQueue<S, P>, A, I, F, N>
 where
-    A: Fn(&S) -> Vec<S>,
-    F: Fn(&S) -> N,
+    A: FnMut(&S) -> I,
+    I: IntoIterator<Item = S>,
+    F: FnMut(&S) -> N,
     N: Hash + Eq,
+    C: FnMut(&S) -> P + 'static,
+    H: FnMut(&S) -> P + 'static,
     P: Ord + Add<Output = P>,
 {
     Traversal::new(
@@ -100,14 +109,15 @@ where
     )
 }
 
-impl<S, Q, A, F, N> Traversal<S, Q, A, F, N>
+impl<S, Q, A, I, F, N> Traversal<S, Q, A, I, F, N>
 where
     Q: Collection<S>,
-    A: Fn(&S) -> Vec<S>,
-    F: Fn(&S) -> N,
+    A: FnMut(&S) -> I,
+    I: IntoIterator<Item = S>,
+    F: FnMut(&S) -> N,
     N: Hash + Eq,
 {
-    fn new(states: Q, adjacent: A, normalise: F) -> Traversal<S, Q, A, F, N> {
+    fn new(states: Q, adjacent: A, normalise: F) -> Traversal<S, Q, A, I, F, N> {
         Traversal {
             adjacent,
             normalise,
@@ -117,9 +127,9 @@ where
         }
     }
 
-    pub fn search<G>(mut self, goal: G) -> Option<S>
+    pub fn search<G>(mut self, mut goal: G) -> Option<S>
     where
-        G: Fn(&S) -> bool,
+        G: FnMut(&S) -> bool,
     {
         while let Some(state) = self.next() {
             if goal(&state) {
@@ -183,16 +193,16 @@ where
     P: Ord,
 {
     heap: BinaryHeap<PriorityState<S, P>>,
-    priority: Box<dyn Fn(&S) -> P>,
+    priority: Box<dyn FnMut(&S) -> P>,
 }
 
 impl<S, P> PriorityQueue<S, P>
 where
     P: Ord,
 {
-    fn new(start: S, priority: impl Fn(&S) -> P + 'static) -> PriorityQueue<S, P> {
+    fn new(start: S, mut priority: impl FnMut(&S) -> P + 'static) -> PriorityQueue<S, P> {
         PriorityQueue {
-            heap: BinaryHeap::from([PriorityState::new(start, &priority)]),
+            heap: BinaryHeap::from([PriorityState::new(start, &mut priority)]),
             priority: Box::new(priority),
         }
     }
@@ -203,7 +213,8 @@ where
     P: Ord,
 {
     fn push(&mut self, state: S) {
-        self.heap.push(PriorityState::new(state, &self.priority));
+        self.heap
+            .push(PriorityState::new(state, &mut self.priority));
     }
 
     fn pop(&mut self) -> Option<S> {
@@ -223,9 +234,9 @@ impl<S, P> PriorityState<S, P>
 where
     P: Ord,
 {
-    fn new<C>(state: S, priority: C) -> PriorityState<S, P>
+    fn new<C>(state: S, mut priority: C) -> PriorityState<S, P>
     where
-        C: Fn(&S) -> P,
+        C: FnMut(&S) -> P,
     {
         let priority = priority(&state);
         PriorityState { state, priority }
