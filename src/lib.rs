@@ -6,20 +6,20 @@ use std::{
     ops::Add,
 };
 
-struct Traverse<S, Q, A, I, F, N> {
-    adjacent: A,
-    normalise: F,
+struct Traverse<S, Q, AF, A, NF, N> {
+    adjacent: AF,
+    normalise: NF,
     states: Q,
     visited: HashSet<N>,
-    _phantom: PhantomData<(S, I)>,
+    _phantom: PhantomData<(S, A)>,
 }
 
-impl<S, Q, A, I, F, N> Iterator for Traverse<S, Q, A, I, F, N>
+impl<S, Q, AF, A, NF, N> Iterator for Traverse<S, Q, AF, A, NF, N>
 where
     Q: Collection<S>,
-    A: FnMut(&S) -> I,
-    I: IntoIterator<Item = S>,
-    F: FnMut(&S) -> N,
+    AF: FnMut(&S) -> A,
+    A: IntoIterator<Item = S>,
+    NF: FnMut(&S) -> N,
     N: Hash + Eq,
 {
     type Item = S;
@@ -39,72 +39,72 @@ where
     }
 }
 
-pub fn bft<S, A, I, F, N>(start: S, adjacent: A, normalise: F) -> impl Iterator<Item = S>
+pub fn bft<S, AF, A, NF, N>(start: S, adjacent: AF, normalise: NF) -> impl Iterator<Item = S>
 where
-    A: FnMut(&S) -> I,
-    I: IntoIterator<Item = S>,
-    F: FnMut(&S) -> N,
+    AF: FnMut(&S) -> A,
+    A: IntoIterator<Item = S>,
+    NF: FnMut(&S) -> N,
     N: Hash + Eq,
 {
-    Traverse::new(Queue::new(), start, adjacent, normalise)
+    Traverse::new(start, Queue::new(), adjacent, normalise)
 }
 
-pub fn dft<S, A, I, F, N>(start: S, adjacent: A, normalise: F) -> impl Iterator<Item = S>
+pub fn dft<S, AF, A, NF, N>(start: S, adjacent: AF, normalise: NF) -> impl Iterator<Item = S>
 where
-    A: FnMut(&S) -> I,
-    I: IntoIterator<Item = S>,
-    F: FnMut(&S) -> N,
+    AF: FnMut(&S) -> A,
+    A: IntoIterator<Item = S>,
+    NF: FnMut(&S) -> N,
     N: Hash + Eq,
 {
-    Traverse::new(Stack::new(), start, adjacent, normalise)
+    Traverse::new(start, Stack::new(), adjacent, normalise)
 }
 
-pub fn dijkstra<S, A, I, F, N, C, P>(
+pub fn dijkstra<S, AF, A, NF, N, CF, P>(
     start: S,
-    adjacent: A,
-    normalise: F,
-    cost: C,
+    adjacent: AF,
+    normalise: NF,
+    cost: CF,
 ) -> impl Iterator<Item = S>
 where
-    A: FnMut(&S) -> I,
-    I: IntoIterator<Item = S>,
-    F: FnMut(&S) -> N,
+    AF: FnMut(&S) -> A,
+    A: IntoIterator<Item = S>,
+    NF: FnMut(&S) -> N,
     N: Hash + Eq,
-    C: FnMut(&S) -> P,
+    CF: FnMut(&S) -> P,
     P: Ord,
 {
-    Traverse::new(PriorityQueue::new(cost), start, adjacent, normalise)
+    Traverse::new(start, PriorityQueue::new(cost), adjacent, normalise)
 }
 
-pub fn a_star<S, A, I, F, N, C, H, P>(
+pub fn a_star<S, AF, A, NF, N, CF, HF, P>(
     start: S,
-    adjacent: A,
-    normalise: F,
-    mut cost: C,
-    mut heuristic: H,
+    adjacent: AF,
+    normalise: NF,
+    mut cost: CF,
+    mut heuristic: HF,
 ) -> impl Iterator<Item = S>
 where
-    A: FnMut(&S) -> I,
-    I: IntoIterator<Item = S>,
-    F: FnMut(&S) -> N,
+    AF: FnMut(&S) -> A,
+    A: IntoIterator<Item = S>,
+    NF: FnMut(&S) -> N,
     N: Hash + Eq,
-    C: FnMut(&S) -> P,
-    H: FnMut(&S) -> P,
+    CF: FnMut(&S) -> P,
+    HF: FnMut(&S) -> P,
     P: Add,
     <P as Add>::Output: Ord,
 {
     dijkstra(start, adjacent, normalise, move |s| cost(s) + heuristic(s))
 }
 
-impl<S, Q, A, I, F, N> Traverse<S, Q, A, I, F, N>
+impl<S, Q, AF, A, NF, N> Traverse<S, Q, AF, A, NF, N>
 where
     Q: Collection<S>,
-    A: FnMut(&S) -> I,
-    I: IntoIterator<Item = S>,
-    F: FnMut(&S) -> N,
+    AF: FnMut(&S) -> A,
+    A: IntoIterator<Item = S>,
+    NF: FnMut(&S) -> N,
     N: Hash + Eq,
 {
-    fn new(mut states: Q, start: S, adjacent: A, normalise: F) -> Traverse<S, Q, A, I, F, N> {
+    fn new(start: S, mut states: Q, adjacent: AF, normalise: NF) -> Traverse<S, Q, AF, A, NF, N> {
         states.push(start);
         Traverse {
             adjacent,
@@ -164,17 +164,17 @@ impl<S> Collection<S> for Queue<S> {
     }
 }
 
-struct PriorityQueue<S, C, P> {
+struct PriorityQueue<S, PF, P> {
     heap: BinaryHeap<PriorityState<S, P>>,
-    priority: C,
+    priority: PF,
 }
 
-impl<S, C, P> PriorityQueue<S, C, P>
+impl<S, PF, P> PriorityQueue<S, PF, P>
 where
-    C: FnMut(&S) -> P,
+    PF: FnMut(&S) -> P,
     P: Ord,
 {
-    fn new(priority: C) -> PriorityQueue<S, C, P> {
+    fn new(priority: PF) -> PriorityQueue<S, PF, P> {
         PriorityQueue {
             heap: BinaryHeap::new(),
             priority,
@@ -182,9 +182,9 @@ where
     }
 }
 
-impl<S, C, P> Collection<S> for PriorityQueue<S, C, P>
+impl<S, PF, P> Collection<S> for PriorityQueue<S, PF, P>
 where
-    C: FnMut(&S) -> P,
+    PF: FnMut(&S) -> P,
     P: Ord,
 {
     fn push(&mut self, state: S) {
