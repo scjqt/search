@@ -91,7 +91,7 @@ where
 ///     ('f', vec!['c']),
 /// ]);
 ///
-/// let mut traverse = bft('a', |x| graph[x].clone(), |x| *x);
+/// let mut traverse = bft('a', |x| (&graph[x]).clone(), |x| *x);
 /// assert_eq!(traverse.next(), Some('a'));
 /// assert_eq!(traverse.next(), Some('b'));
 /// assert_eq!(traverse.next(), Some('d'));
@@ -99,6 +99,18 @@ where
 /// assert_eq!(traverse.next(), Some('c'));
 /// assert_eq!(traverse.next(), Some('f'));
 /// assert_eq!(traverse.next(), None);
+///
+/// // To find the length of the shortest path to a target node:
+///
+/// let length = bft(
+///     ('a', 0),
+///     |&(x, cost)| graph[&x].clone().into_iter().map(move |y| (y, cost + 1)),
+///     |(x, _)| *x,
+/// )
+/// .find(|(x, _)| *x == 'f')
+/// .unwrap()
+/// .1;
+/// assert_eq!(length, 3);
 /// ```
 pub fn bft<S, AF, A, NF, N>(start: S, adjacent: AF, normalise: NF) -> impl Iterator<Item = S>
 where
@@ -213,7 +225,7 @@ where
 /// assert_eq!(traverse.next(), Some(('f', 14)));
 /// assert_eq!(traverse.next(), None);
 ///
-/// // To search for a target node, use .find()
+/// // To search for a target node:
 ///
 /// let cost = dijkstra(
 ///     ('a', 0),
