@@ -134,20 +134,20 @@ use std::{
     ops::Add,
 };
 
-struct Traverse<S, Q, AF, A, NF, N> {
-    adjacent: AF,
-    normalise: NF,
+struct Traverse<S, Q, Af, A, Nf, N> {
+    adjacent: Af,
+    normalise: Nf,
     states: Q,
     visited: HashSet<N>,
     _phantom: PhantomData<(S, A)>,
 }
 
-impl<S, Q, AF, A, NF, N> Iterator for Traverse<S, Q, AF, A, NF, N>
+impl<S, Q, Af, A, Nf, N> Iterator for Traverse<S, Q, Af, A, Nf, N>
 where
     Q: Collection<S>,
-    AF: FnMut(&S) -> A,
+    Af: FnMut(&S) -> A,
     A: IntoIterator<Item = S>,
-    NF: FnMut(&S) -> N,
+    Nf: FnMut(&S) -> N,
     N: Eq + Hash,
 {
     type Item = S;
@@ -169,15 +169,15 @@ where
     }
 }
 
-impl<S, Q, AF, A, NF, N> Traverse<S, Q, AF, A, NF, N>
+impl<S, Q, Af, A, Nf, N> Traverse<S, Q, Af, A, Nf, N>
 where
     Q: Collection<S>,
-    AF: FnMut(&S) -> A,
+    Af: FnMut(&S) -> A,
     A: IntoIterator<Item = S>,
-    NF: FnMut(&S) -> N,
+    Nf: FnMut(&S) -> N,
     N: Eq + Hash,
 {
-    fn new(start: S, mut states: Q, adjacent: AF, normalise: NF) -> Traverse<S, Q, AF, A, NF, N> {
+    fn new(start: S, mut states: Q, adjacent: Af, normalise: Nf) -> Traverse<S, Q, Af, A, Nf, N> {
         states.push(start);
         Traverse {
             adjacent,
@@ -287,14 +287,14 @@ where
 /// assert_eq!(goal.node, 'f');
 /// assert_eq!(goal.path, vec!['a', 'b', 'c', 'f']);
 /// ```
-pub fn bft<S, AF, A, NF, N>(start: S, adjacent: AF, normalise: NF) -> impl Iterator<Item = S>
+pub fn bft<S, Af, A, Nf, N>(start: S, adjacent: Af, normalise: Nf) -> impl Iterator<Item = S>
 where
-    AF: FnMut(&S) -> A,
+    Af: FnMut(&S) -> A,
     A: IntoIterator<Item = S>,
-    NF: FnMut(&S) -> N,
+    Nf: FnMut(&S) -> N,
     N: Eq + Hash,
 {
-    Traverse::new(start, Queue::new(), adjacent, normalise)
+    Traverse::new(start, VecDeque::new(), adjacent, normalise)
 }
 
 /// A function for traversing a graph with a [depth-first](https://en.wikipedia.org/wiki/Depth-first_search) traversal.
@@ -368,14 +368,14 @@ where
 /// assert_eq!(goal.node, 'f');
 /// assert_eq!(goal.path, vec!['a', 'e', 'c', 'f']);
 /// ```
-pub fn dft<S, AF, A, NF, N>(start: S, adjacent: AF, normalise: NF) -> impl Iterator<Item = S>
+pub fn dft<S, Af, A, Nf, N>(start: S, adjacent: Af, normalise: Nf) -> impl Iterator<Item = S>
 where
-    AF: FnMut(&S) -> A,
+    Af: FnMut(&S) -> A,
     A: IntoIterator<Item = S>,
-    NF: FnMut(&S) -> N,
+    Nf: FnMut(&S) -> N,
     N: Eq + Hash,
 {
-    Traverse::new(start, Stack::new(), adjacent, normalise)
+    Traverse::new(start, Vec::new(), adjacent, normalise)
 }
 
 /// A function for traversing a weighted graph using [Dijkstra's algorithm](https://en.wikipedia.org/wiki/Dijkstra%27s_algorithm).
@@ -490,18 +490,18 @@ where
 /// assert_eq!(goal.node, 'f');
 /// assert_eq!(goal.path, vec!['a', 'd', 'e', 'c', 'f']);
 /// ```
-pub fn dijkstra<S, AF, A, NF, N, CF, P>(
+pub fn dijkstra<S, Af, A, Nf, N, Cf, P>(
     start: S,
-    adjacent: AF,
-    normalise: NF,
-    cost: CF,
+    adjacent: Af,
+    normalise: Nf,
+    cost: Cf,
 ) -> impl Iterator<Item = S>
 where
-    AF: FnMut(&S) -> A,
+    Af: FnMut(&S) -> A,
     A: IntoIterator<Item = S>,
-    NF: FnMut(&S) -> N,
+    Nf: FnMut(&S) -> N,
     N: Eq + Hash,
-    CF: FnMut(&S) -> P,
+    Cf: FnMut(&S) -> P,
     P: Ord,
 {
     Traverse::new(start, PriorityQueue::new(cost), adjacent, normalise)
@@ -575,20 +575,20 @@ where
 ///
 /// assert_eq!(goal.cost, 8);
 /// ```
-pub fn a_star<S, AF, A, NF, N, CF, HF, P>(
+pub fn a_star<S, Af, A, Nf, N, Cf, Hf, P>(
     start: S,
-    adjacent: AF,
-    normalise: NF,
-    mut cost: CF,
-    mut heuristic: HF,
+    adjacent: Af,
+    normalise: Nf,
+    mut cost: Cf,
+    mut heuristic: Hf,
 ) -> impl Iterator<Item = S>
 where
-    AF: FnMut(&S) -> A,
+    Af: FnMut(&S) -> A,
     A: IntoIterator<Item = S>,
-    NF: FnMut(&S) -> N,
+    Nf: FnMut(&S) -> N,
     N: Eq + Hash,
-    CF: FnMut(&S) -> P,
-    HF: FnMut(&S) -> P,
+    Cf: FnMut(&S) -> P,
+    Hf: FnMut(&S) -> P,
     P: Add,
     <P as Add>::Output: Ord,
 {
@@ -601,59 +601,37 @@ trait Collection<S> {
     fn pop(&mut self) -> Option<S>;
 }
 
-struct Stack<S> {
-    stack: Vec<S>,
-}
-
-impl<S> Stack<S> {
-    fn new() -> Stack<S> {
-        Stack { stack: Vec::new() }
-    }
-}
-
-impl<S> Collection<S> for Stack<S> {
+impl<S> Collection<S> for Vec<S> {
     fn push(&mut self, state: S) {
-        self.stack.push(state);
+        self.push(state);
     }
 
     fn pop(&mut self) -> Option<S> {
-        self.stack.pop()
+        self.pop()
     }
 }
 
-struct Queue<S> {
-    queue: VecDeque<S>,
-}
-
-impl<S> Queue<S> {
-    fn new() -> Queue<S> {
-        Queue {
-            queue: VecDeque::new(),
-        }
-    }
-}
-
-impl<S> Collection<S> for Queue<S> {
+impl<S> Collection<S> for VecDeque<S> {
     fn push(&mut self, state: S) {
-        self.queue.push_back(state);
+        self.push_back(state);
     }
 
     fn pop(&mut self) -> Option<S> {
-        self.queue.pop_front()
+        self.pop_front()
     }
 }
 
-struct PriorityQueue<S, PF, P> {
+struct PriorityQueue<S, Pf, P> {
     heap: BinaryHeap<PriorityState<S, P>>,
-    priority: PF,
+    priority: Pf,
 }
 
-impl<S, PF, P> PriorityQueue<S, PF, P>
+impl<S, Pf, P> PriorityQueue<S, Pf, P>
 where
-    PF: FnMut(&S) -> P,
+    Pf: FnMut(&S) -> P,
     P: Ord,
 {
-    fn new(priority: PF) -> PriorityQueue<S, PF, P> {
+    fn new(priority: Pf) -> PriorityQueue<S, Pf, P> {
         PriorityQueue {
             heap: BinaryHeap::new(),
             priority,
@@ -661,9 +639,9 @@ where
     }
 }
 
-impl<S, PF, P> Collection<S> for PriorityQueue<S, PF, P>
+impl<S, Pf, P> Collection<S> for PriorityQueue<S, Pf, P>
 where
-    PF: FnMut(&S) -> P,
+    Pf: FnMut(&S) -> P,
     P: Ord,
 {
     fn push(&mut self, state: S) {
