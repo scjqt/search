@@ -128,11 +128,13 @@
 
 use std::{
     cmp::Ordering,
-    collections::{BinaryHeap, HashSet, VecDeque},
+    collections::{BinaryHeap, VecDeque},
     hash::Hash,
     marker::PhantomData,
     ops::Add,
 };
+
+use fxhash::FxHashSet as HashSet;
 
 struct Traverse<S, Q, Af, A, Nf, N> {
     adjacent: Af,
@@ -183,7 +185,7 @@ where
             adjacent,
             normalise,
             states,
-            visited: HashSet::new(),
+            visited: HashSet::default(),
             _phantom: PhantomData,
         }
     }
