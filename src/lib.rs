@@ -134,7 +134,7 @@ use std::{
     ops::Add,
 };
 
-use fxhash::FxHashSet as HashSet;
+use rustc_hash::FxHashSet as HashSet;
 
 struct Traverse<S, Q, Af, A, Nf, N> {
     adjacent: Af,
